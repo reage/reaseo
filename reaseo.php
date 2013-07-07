@@ -3,7 +3,7 @@
 Plugin Name: ReaSEO
 Plugin URI: http://www.daruisoft.com
 Description: 自动化的SEO信息添加工具，减轻您SEO优化的压力。
-Version: 1.0
+Version: 1.1
 Author: Reage
 Author URI: http://www.reastudio.com
 */
@@ -14,9 +14,9 @@ add_action('wp_head', 'auto_seo', 1);
  * 入口函数
  */
 function auto_seo() {
-  $title = get_the_title();
+	$title = get_the_title();
 	$content = Get_Article();
-    $seo = main($title, $content, 'http://smtseo.sinaapp.com/1/segment.php?title=');
+    $seo = main($title, $content);
 	echo $seo;
 }
 
@@ -27,9 +27,8 @@ function auto_seo() {
  * @param string $api 分词API地址
  * @return string $meta META标签
  */
-function main($title, $content, $api) {
-    $segment = unserialize(file_get_contents($api.$title));
-    $meta = '<!--ReaSEO START-->'.Build_KeyWords_Meta($segment).Build_Description_Meta($title, $content).'<!--ReaSEO End-->';
+function main($title, $content) {
+    $meta = '<!--ReaSEO START-->'.Build_KeyWords_Meta($title, $content).Build_Description_Meta($title, $content).'<!--ReaSEO End-->';
     return $meta;
 }
 
@@ -38,29 +37,14 @@ function main($title, $content, $api) {
  * @param array $segment 分词结果数组
  * @return string $standard_meta_keywords 组装好的KeyWords头
  */
-function Build_KeyWords_Meta($segment) {
-	$title_state = '95,96,99,102,130,131,170,171,180';
-	$keywords = '';
-	
-	foreach ($segment as $sub_seg) {
-	    
-		$type = $sub_seg['word_tag'];
-		$pos = strpos($title_state, $type);
-		
-		if (!($pos===false)) {
-		    $isRepetition = strpos($keywords, $sub_seg['word']);
-		    
-		    if ($isRepetition===false) {
-		        $keywords = $keywords.$sub_seg['word'].' ';
-		    }
-		    
-		}
-	}
-	
+function Build_KeyWords_Meta($seg_content, $art_content) {
+    //echo $seg_content;
+    $keywords = trim(segment($seg_content, $art_content));
 	$standard_meta_keywords = '<meta name="Keywords" content="%keywords%" />';
-	$standard_meta_keywords = str_replace('%keywords%', $keywords, $standard_meta_keywords);
-	
-	return $standard_meta_keywords;
+    $standard_meta_keywords = str_replace('%keywords%', $keywords, $standard_meta_keywords);
+    
+    return $standard_meta_keywords;
+
 }
     
 /**
@@ -103,5 +87,51 @@ function Get_Article() {
     $content = apply_filters('the_content', $content);
     $content = str_replace(']]>', ']]&gt;', $content);
     return $content;
+}
+
+/**
+ * 对照分词
+ * @return string $keywords
+ */
+function segment($seg_content, $art_content) {
+    $keywords = '';
+    $i=1;
+    $legal = array('，','。','、','？','》','《','；','：','“','”','‘',
+        '’','、','|','}','{','【','】','——','）','（','%','·','~',
+        '`','!','@','#','$','%','^','&','*','(',')','-','_',
+        '+','=','[',']',';',':','?','/','>','<',',','.');
+    
+    foreach ($legal as $value) {
+        $seg_content = str_replace($value, '', $seg_content);
+    }
+
+    $length = 0;
+    $entry = mb_substr($seg_content, 0, 1, 'utf8');
+    
+    while (strlen($seg_content)) {
+        if (!(strpos($art_content, $entry)===false)) {
+            if (mb_strlen($entry,'utf8') == mb_strlen($seg_content, 'utf8')) {
+                $keywords = $keywords.$entry.' ';
+                break;
+            }else{
+                $word = $entry;
+                $length++;
+                $entry = mb_substr($seg_content, 0, $length, 'utf8');
+            }
+        }else{
+            if (mb_strlen($entry, 'utf8') == 1) {
+                $seg_content = str_replace($entry, '', $seg_content);
+            }else{
+					$keywords = $keywords.$word.' ';
+					$seg_content = str_replace($word, '', $seg_content);
+					if (mb_strlen($word,'utf8')==1) {
+						$keywords = str_replace($word, '', $keywords);
+					}
+            }
+            $length = 0;
+            $entry = mb_substr($seg_content, 0, 1, 'utf8');
+        }
+    }
+    return $keywords;
 }
 ?>
